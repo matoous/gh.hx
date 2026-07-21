@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  STEEL_VERSION: v0.8.2
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Steel
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            "https://github.com/mattwparas/steel/releases/download/${STEEL_VERSION}/steel-interpreter-installer.sh" \
+            | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Show Steel version
+        run: steel --version
+
+      - name: Link local cog
+        run: |
+          mkdir -p "$HOME/.local/share/steel/cogs/gh.hx"
+          ln -sfn "$GITHUB_WORKSPACE/cogs" "$HOME/.local/share/steel/cogs/gh.hx/cogs"
+
+      - name: Run tests
+        run: steel tests/gh-core.scm
+
+  release-please:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
+          skip-github-pull-request: "${{ startsWith(github.event.head_commit.message, 'release: ') }}"
